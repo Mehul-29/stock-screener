@@ -30,7 +30,7 @@ with st.spinner("🔍 Scanning NIFTY stocks..."):
             df['ema20'] = EMAIndicator(close=df['Close'], window=20).ema_indicator()
             last = df.iloc[-1]
 
-            if last['Close'] > last['ema10'] and last['Close'] > last['ema20'] and last['rsi'] > 60:
+            if last['Close'] > last['ema10'] and last['Close'] > last['ema20'] and last['rsi'] > 40:
                 bullish.append({
                     'Stock': symbol.replace(".NS", ""),
                     'Close': round(last['Close'], 2),
