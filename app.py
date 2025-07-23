@@ -38,9 +38,20 @@ if len(close_series) < 15:
     continue
 
 try:
-    rsi = ta.momentum.RSIIndicator(close_series).rsi()
-    df = df.loc[rsi.index]  # align to valid index
+    close_series = df["Close"]
+
+    # Force it to be a 1D Series
+    if isinstance(close_series, pd.DataFrame):
+        close_series = close_series.squeeze()
+
+    if close_series.empty or len(close_series) < 15:
+        debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "Close series too short or empty"})
+        continue
+
+    rsi = ta.momentum.RSIIndicator(close=close_series).rsi()
+    df = df.loc[rsi.index]
     df["rsi"] = rsi
+
 except Exception as e:
     debug.append({"Stock": symbol.replace(".NS", ""), "Failed": f"RSI Error: {str(e)}"})
     continue
