@@ -18,35 +18,39 @@ bullish = []
 debug = []
 
 for symbol in symbols:
-    try:
+   try:
     df = yf.download(symbol, interval="5m", period="5d", progress=False)
-    if df.empty or df["Close"].isnull().all():
-        debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "No 5-min data or Close NaN"})
+    if df.empty or "Close" not in df.columns or df["Close"].isnull().all():
+        debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "No 5-min data"})
         continue
 
     df["vwap"] = (df["High"] + df["Low"] + df["Close"]) / 3
 
-    # Check RSI input
-    if df["Close"].dropna().shape[0] < 15:
-        debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "Not enough 5-min candles for RSI"})
+    close_series = df["Close"].dropna()
+    if close_series.shape[0] < 15:
+        debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "Insufficient 5-min candles for RSI"})
         continue
 
-    df["rsi"] = ta.momentum.RSIIndicator(df["Close"].fillna(method='ffill')).rsi()
+    rsi_series = ta.momentum.RSIIndicator(close_series).rsi()
+    df["rsi"] = rsi_series.reindex(df.index)
+
     latest = df.iloc[-1]
 
     df_daily = yf.download(symbol, interval="1d", period="1y", progress=False)
-    if df_daily.empty or df_daily["Close"].isnull().all():
-        debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "No daily data or Close NaN"})
+    if df_daily.empty or "Close" not in df_daily.columns or df_daily["Close"].isnull().all():
+        debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "No daily data"})
         continue
 
-    df_daily["ema10"] = ta.trend.ema_indicator(df_daily["Close"].fillna(method='ffill'), window=10)
-    df_daily["ema20"] = ta.trend.ema_indicator(df_daily["Close"].fillna(method='ffill'), window=20)
-    df_daily["ema50"] = ta.trend.ema_indicator(df_daily["Close"].fillna(method='ffill'), window=50)
-    df_daily["ema200"] = ta.trend.ema_indicator(df_daily["Close"].fillna(method='ffill'), window=200)
+    daily_close = df_daily["Close"].fillna(method="ffill")
+    df_daily["ema10"] = ta.trend.ema_indicator(daily_close, window=10)
+    df_daily["ema20"] = ta.trend.ema_indicator(daily_close, window=20)
+    df_daily["ema50"] = ta.trend.ema_indicator(daily_close, window=50)
+    df_daily["ema200"] = ta.trend.ema_indicator(daily_close, window=200)
+
     latest_daily = df_daily.iloc[-1]
 
+    # Screening Conditions
     reasons = []
-
     if latest_daily["Close"] <= latest_daily["ema10"]:
         reasons.append("Close < EMA10")
     if latest_daily["Close"] <= latest_daily["ema20"]:
@@ -71,7 +75,7 @@ for symbol in symbols:
         debug.append({"Stock": symbol.replace(".NS", ""), "Failed": ", ".join(reasons)})
 
 except Exception as e:
-    debug.append({"Stock": symbol.replace(".NS", ""), "Failed": f"Error: {e}"})
+    debug.append({"Stock": symbol.replace(".NS", ""), "Failed": str(e)})
         
 
 # Show results
