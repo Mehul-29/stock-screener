@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import ta
-import datetime
 
 st.set_page_config(page_title="Debug Bullish Screener", layout="wide")
 st.title("🛠️ Debug Bullish Stock Screener (NIFTY 500)")
@@ -12,7 +11,7 @@ def load_symbols():
     df = pd.read_csv("https://raw.githubusercontent.com/Mehul-29/stock-screener/main/nifty500.csv")
     return [s + '.NS' for s in df['Symbol']]
 
-symbols = load_symbols()[:50]  # Test only first 50 to avoid throttling
+symbols = load_symbols()[:50]  # Testing with first 50 symbols
 st.write(f"✅ Loaded {len(symbols)} symbols")
 
 bullish = []
@@ -21,11 +20,19 @@ debug = []
 for symbol in symbols:
     try:
         df = yf.download(symbol, interval="5m", period="5d", progress=False)
+        if df.empty:
+            debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "No 5-min data"})
+            continue
+
         df["vwap"] = (df["High"] + df["Low"] + df["Close"]) / 3
         df["rsi"] = ta.momentum.RSIIndicator(df["Close"]).rsi()
         latest = df.iloc[-1]
 
         df_daily = yf.download(symbol, interval="1d", period="1y", progress=False)
+        if df_daily.empty:
+            debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "No daily data"})
+            continue
+
         df_daily["ema10"] = ta.trend.ema_indicator(df_daily["Close"], window=10)
         df_daily["ema20"] = ta.trend.ema_indicator(df_daily["Close"], window=20)
         df_daily["ema50"] = ta.trend.ema_indicator(df_daily["Close"], window=50)
@@ -44,8 +51,8 @@ for symbol in symbols:
             reasons.append("Close < EMA200")
         if latest["Close"] <= latest["vwap"]:
             reasons.append("Close < VWAP")
-        if latest["rsi"] <= 60:
-            reasons.append("RSI ≤ 60")
+        if latest["rsi"] <= 60 or pd.isna(latest["rsi"]):
+            reasons.append("RSI ≤ 60 or NaN")
 
         if not reasons:
             bullish.append({
