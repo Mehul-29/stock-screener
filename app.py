@@ -17,7 +17,7 @@ Scans stocks with:
 
 @st.cache_data
 def load_symbols():
-    df = pd.read_csv("https://raw.githubusercontent.com/Priyaptl18/stock_screener/main/nifty500.csv")
+    df = pd.read_csv("https://raw.githubusercontent.com/Mehul-29/stock_screener/main/nifty500.csv")
     return [s + ".NS" for s in df['Symbol']]
 
 symbols = load_symbols()
