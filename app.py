@@ -31,8 +31,19 @@ for symbol in symbols:
         debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "Insufficient 5-min candles for RSI"})
         continue
 
-    rsi_series = ta.momentum.RSIIndicator(close_series).rsi()
-    df["rsi"] = rsi_series.reindex(df.index)
+   close_series = df["Close"].dropna()
+
+if len(close_series) < 15:
+    debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "Not enough Close data for RSI"})
+    continue
+
+try:
+    rsi = ta.momentum.RSIIndicator(close_series).rsi()
+    df = df.loc[rsi.index]  # align to valid index
+    df["rsi"] = rsi
+except Exception as e:
+    debug.append({"Stock": symbol.replace(".NS", ""), "Failed": f"RSI Error: {str(e)}"})
+    continue
 
     latest = df.iloc[-1]
 
