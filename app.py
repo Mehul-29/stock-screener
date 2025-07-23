@@ -1,71 +1,72 @@
-import yfinance as yf
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import yfinance as yf
 import ta
+import datetime
+
+st.set_page_config(page_title="Debug Bullish Screener", layout="wide")
+st.title("🛠️ Debug Bullish Stock Screener (NIFTY 500)")
 
 @st.cache_data
 def load_symbols():
-    df = pd.read_csv("nifty500.csv")
-    return [s + ".NS" for s in df['Symbol']]
+    df = pd.read_csv("https://raw.githubusercontent.com/Mehul-29/stock-screener/main/nifty500.csv")
+    return [s + '.NS' for s in df['Symbol']]
 
-def check_conditions(symbol):
+symbols = load_symbols()[:50]  # Test only first 50 to avoid throttling
+st.write(f"✅ Loaded {len(symbols)} symbols")
+
+bullish = []
+debug = []
+
+for symbol in symbols:
     try:
-        # Download 5 min data (last 5 days)
-        df_5m = yf.download(symbol, interval="5m", period="5d", progress=False)
-        if df_5m.empty:
-            return False
-        
-        df_5m.dropna(inplace=True)
+        df = yf.download(symbol, interval="5m", period="5d", progress=False)
+        df["vwap"] = (df["High"] + df["Low"] + df["Close"]) / 3
+        df["rsi"] = ta.momentum.RSIIndicator(df["Close"]).rsi()
+        latest = df.iloc[-1]
 
-        # Calculate VWAP
-        df_5m["vwap"] = ta.volume.VolumeWeightedAveragePrice(
-            high=df_5m["High"], low=df_5m["Low"], close=df_5m["Close"], volume=df_5m["Volume"]
-        ).vwap()
-
-        # Calculate RSI
-        df_5m["rsi"] = ta.momentum.RSIIndicator(close=df_5m["Close"]).rsi()
-
-        # Get latest row
-        latest = df_5m.iloc[-1]
-        
-        # Get Daily data
-        df_daily = yf.download(symbol, interval="1d", period="100d", progress=False)
-        df_daily.dropna(inplace=True)
-
+        df_daily = yf.download(symbol, interval="1d", period="1y", progress=False)
         df_daily["ema10"] = ta.trend.ema_indicator(df_daily["Close"], window=10)
         df_daily["ema20"] = ta.trend.ema_indicator(df_daily["Close"], window=20)
         df_daily["ema50"] = ta.trend.ema_indicator(df_daily["Close"], window=50)
         df_daily["ema200"] = ta.trend.ema_indicator(df_daily["Close"], window=200)
-
         latest_daily = df_daily.iloc[-1]
 
-        # Condition checks
-        conditions = [
-            latest_daily["Close"] > latest_daily["ema10"],
-            latest_daily["Close"] > latest_daily["ema20"],
-            latest_daily["Close"] > latest_daily["ema50"],
-            latest_daily["Close"] > latest_daily["ema200"],
-            latest["Close"] > latest["vwap"],
-            latest["rsi"] > 60,
-        ]
+        reasons = []
 
-        return all(conditions)
+        if latest_daily["Close"] <= latest_daily["ema10"]:
+            reasons.append("Close < EMA10")
+        if latest_daily["Close"] <= latest_daily["ema20"]:
+            reasons.append("Close < EMA20")
+        if latest_daily["Close"] <= latest_daily["ema50"]:
+            reasons.append("Close < EMA50")
+        if latest_daily["Close"] <= latest_daily["ema200"]:
+            reasons.append("Close < EMA200")
+        if latest["Close"] <= latest["vwap"]:
+            reasons.append("Close < VWAP")
+        if latest["rsi"] <= 60:
+            reasons.append("RSI ≤ 60")
+
+        if not reasons:
+            bullish.append({
+                "Stock": symbol.replace(".NS", ""),
+                "Close": round(latest["Close"], 2),
+                "VWAP": round(latest["vwap"], 2),
+                "RSI": round(latest["rsi"], 2)
+            })
+        else:
+            debug.append({"Stock": symbol.replace(".NS", ""), "Failed": ", ".join(reasons)})
 
     except Exception as e:
-        print(f"Error checking {symbol}: {e}")
-        return False
+        debug.append({"Stock": symbol.replace(".NS", ""), "Failed": f"Error: {e}"})
 
+# Show results
+if bullish:
+    st.success(f"✅ Found {len(bullish)} bullish stocks")
+    st.dataframe(pd.DataFrame(bullish))
+else:
+    st.warning("⚠️ No bullish stocks found")
 
-st.title("NSE Stock Screener")
-
-symbols = load_symbols()
-passed = []
-
-st.text("Scanning stocks... This may take a few minutes ⏳")
-
-for symbol in symbols:
-    if check_conditions(symbol):
-        passed.append(symbol)
-
-st.success(f"{len(passed)} stocks passed the filters ✅")
-st.write(passed)
+st.markdown("---")
+st.subheader("🔎 Debug Details")
+st.dataframe(pd.DataFrame(debug))
