@@ -11,7 +11,7 @@ def load_symbols():
     df = pd.read_csv("https://raw.githubusercontent.com/Mehul-29/stock-screener/main/nifty500.csv")
     return [s + '.NS' for s in df['Symbol']]
 
-symbols = load_symbols()[:50]  # Testing with first 50 symbols
+symbols = load_symbols()[:50]  # Test with 50 symbols
 st.write(f"✅ Loaded {len(symbols)} symbols")
 
 bullish = []
@@ -19,7 +19,6 @@ debug = []
 
 for symbol in symbols:
     try:
-        # 1. Load 5-minute data
         df = yf.download(symbol, interval="5m", period="5d", progress=False)
         if df.empty or "Close" not in df.columns or df["Close"].isnull().all():
             debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "No 5-min data"})
@@ -28,24 +27,26 @@ for symbol in symbols:
         df["vwap"] = (df["High"] + df["Low"] + df["Close"]) / 3
 
         close_series = df["Close"].dropna()
-        if close_series.shape[0] < 15:
-            debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "Insufficient 5-min candles for RSI"})
+
+        if len(close_series) < 15:
+            debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "Not enough data for RSI"})
             continue
 
-        # 2. RSI calculation
-        try:
-            if isinstance(close_series, pd.DataFrame):
-                close_series = close_series.squeeze()
-            rsi = ta.momentum.RSIIndicator(close=close_series).rsi()
-            df = df.loc[rsi.index]
-            df["rsi"] = rsi
-        except Exception as e:
-            debug.append({"Stock": symbol.replace(".NS", ""), "Failed": f"RSI Error: {str(e)}"})
+        # ✅ Ensure close_series is a Series (1D)
+        if isinstance(close_series, pd.DataFrame):
+            close_series = close_series.squeeze()
+
+        # ✅ Ensure still a 1D Series after squeeze
+        if not isinstance(close_series, pd.Series):
+            debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "Close not 1D after squeeze"})
             continue
+
+        rsi = ta.momentum.RSIIndicator(close=close_series).rsi()
+        df = df.loc[rsi.index]
+        df["rsi"] = rsi
 
         latest = df.iloc[-1]
 
-        # 3. Load daily data
         df_daily = yf.download(symbol, interval="1d", period="1y", progress=False)
         if df_daily.empty or "Close" not in df_daily.columns or df_daily["Close"].isnull().all():
             debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "No daily data"})
@@ -59,7 +60,7 @@ for symbol in symbols:
 
         latest_daily = df_daily.iloc[-1]
 
-        # 4. Screening Conditions
+        # Screening Conditions
         reasons = []
         if latest_daily["Close"] <= latest_daily["ema10"]:
             reasons.append("Close < EMA10")
