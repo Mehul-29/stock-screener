@@ -18,8 +18,7 @@ bullish = []
 debug = []
 
 for symbol in symbols:
-    
-       try:
+    try:
     df = yf.download(symbol, interval="5m", period="5d", progress=False)
     if df.empty or df["Close"].isnull().all():
         debug.append({"Stock": symbol.replace(".NS", ""), "Failed": "No 5-min data or Close NaN"})
@@ -73,8 +72,8 @@ for symbol in symbols:
 
 except Exception as e:
     debug.append({"Stock": symbol.replace(".NS", ""), "Failed": f"Error: {e}"})
-
         
+
 # Show results
 if bullish:
     st.success(f"✅ Found {len(bullish)} bullish stocks")
